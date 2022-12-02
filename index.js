@@ -1,274 +1,306 @@
-const express = require("express")
-const bodyParser = require("body-parser")
-const cors = require("cors")
+const { Sequelize, DataTypes } = require("sequelize");
 
-const {Orden,Orden_Producto,PC_Armado,PC_Armado_Producto,Producto,Reporte,Resena,Usuario } = require("./dao")
+const CADENA_CONEXION = process.env.DATABASE_URL
 
-const PORT = process.env.PORT || 4444
-
-const app = express()
-app.use(bodyParser.json())
-app.use(bodyParser.urlencoded({
-    extended : true
-}))
-app.use(cors({
-    origin : "*"
-}))
-
-app.use(express.static('public')); 
-app.use('/images', express.static('images'));
-
-//TERMINADO
-app.post("/register", async (req, res) => {
-    const nombre = req.body.nombre
-    const apellido = req.body.apellido
-    const correo = req.body.correo
-    const password = req.body.password
-    
-    const nuevoUser = await Usuario.create({
-        nombre : nombre,
-        apellido : apellido,
-        correo: correo,
-        contrasena : password
-    })
-    
-    res.send({
-        "id" : nuevoUser.id,
-        "nombre" : nuevoUser.nombre,
-        "apellido" : nuevoUser.apellido,
-    })
-})
-
-//TERMINADO
-app.get("/login", async (req, res) => {
-    const correo = req.query.correo
-    const contrasena = req.query.contrasena
-
-    try{
-        const loggedUsuario = await Usuario.findOne({
-            where: {
-                correo : correo,
-                contrasena : contrasena
-            }
-        })
-
-        res.send({
-            "id" : loggedUsuario.id,
-            "nombre" : loggedUsuario.nombre,
-            "apellido" : loggedUsuario.apellido,
-            "correo" : loggedUsuario.correo,
-            "direccion" : loggedUsuario.direccion,
-            "departamento" : loggedUsuario.departamento,
-            "ciudad" : loggedUsuario.ciudad,
-            "codigo_postal" : loggedUsuario.codigo_postal,
-            "telefono" : loggedUsuario.telefono
-        })
-    } catch {
-        res.send("notfound")
+const sequelize = new Sequelize(CADENA_CONEXION, {
+    dialectOptions : {
+        ssl : {
+            require : true,
+            rejectUnauthorized : false
+        }
     }
-    
 })
 
-app.post("/actualizarDatos", async (req, res) => {
-    const uuid = req.body.id
-    const nombre = req.body.nombre
-    const apellido = req.body.apellido
-    const direccion = req.body.direccion
-    const departamento = req.body.departamento
-    const ciudad = req.body.ciudad
-    const codigo_postal = req.body.codigo_postal
-    const telefono = req.body.telefono
 
-    await Usuario.update({
-        nombre : nombre,
-        apellido : apellido,
-        direccion : direccion,
-        departamento : departamento,
-        ciudad : ciudad,
-        codigo_postal : codigo_postal,
-        telefono : telefono
+
+const Reporte = sequelize.define("reporte", {
+    id : {
+        primaryKey : true,
+        type : DataTypes.UUID,
+        defaultValue : Sequelize.UUIDV4
     },
-    {
-        where : {
-            id : uuid
-        }
-    })
-})
-
-app.get("/infoproducto", async (req, res) => {
-    const uuid  = req.query.id
-    const producto = await Producto.findOne({
-        where : {
-            id : uuid
-        }
-    })
-    res.send({
-        "id" : producto.id,
-        "nombre" : producto.nombre,
-        "precio" : producto.precio,
-        "descripcion" : producto.descripcion,
-        "categoria" : producto.categoria,
-        "imagen" : producto.imagen
-    })
-})
-
-app.get("/productos", async (req, res) => {
-    const productos = await Producto.findAll()
-    res.send(productos)
-})
-
-app.get("/orden/productos", async (req, res) => {
-    const uuid = req.query.id
-    const ordenes = await Orden.findAll({
-        where : {
-            usuario_id : uuid
-        }
-    })
-
-    let listaProductos = []
-
-    for (let i = 0; i < ordenes.length; i++) {
-
-        const ordenesProducto = await Orden_Producto.findAll({
-            where : {
-                orden_id : ordenes[i].id
-            }
-        })
-        for (let j = 0; j < ordenesProducto.length; j++) {
-            const producto = await Producto.findOne({
-                where : {
-                    id : ordenesProducto[j].producto_id
-                },
-                attributes : ['id','nombre','precio','imagen']
-            })
-            let nProducto = {
-                id : producto.id,
-                nombre : producto.nombre,
-                precio : producto.precio,
-                imagen : producto.imagen,
-                fecha : ordenes[i].fecha
-            }
-            listaProductos.push(nProducto)
-        }
+    usuario_id : {
+        type : DataTypes.UUID,
+        allowNull : false
+    },
+    correo : {
+        type : DataTypes.STRING(150),
+        allowNull : false
+    },
+    nombre : {
+        type : DataTypes.STRING(70),
+        allowNull : false
+    },
+    telefono : {
+        type : DataTypes.STRING(15),
+        allowNull : false
+    },
+    asunto : {
+        type : DataTypes.STRING(50),
+        allowNull : false
+    },
+    descripcion : {
+        type : DataTypes.STRING(500),
+        allowNull : false
     }
-    res.send(listaProductos)
-
+}, {
+    timestamps : false,
+    freezeTableName : true
 })
 
-app.post("/orden/generar", async (req, res) => {
-    const usuario = req.body.uId
-    const monto = req.body.monto
-    const direc = req.body.direc
-    const productos = req.body.productos
-
-    const orden = await Orden.create({
-        monto : monto,
-        usuario_id : usuario,
-        direccion : direc,
-        fecha : new Date().toJSON(),
-    })
-
-    for (let i = 0; i < productos.length; i++) {  
-        await Orden_Producto.create({
-            orden_id : orden.id,
-            producto_id : productos[i].id
-        })
+const Usuario = sequelize.define("usuario", {
+    id : {
+        primaryKey : true,
+        type : DataTypes.UUID,
+        defaultValue : Sequelize.UUIDV4
+    },
+    nombre : {
+        type : DataTypes.STRING(70),
+        allowNull : false
+    },
+    apellido : {
+        type : DataTypes.STRING(70),
+        allowNull : false
+    },
+    correo : {
+        type : DataTypes.STRING(150),
+        allowNull : false
+    },
+    contrasena : {
+        type : DataTypes.STRING(150),
+        allowNull : false
+    },
+    direccion : {
+        type : DataTypes.STRING(150),
+        allowNull : true
+    },
+    departamento : {
+        type : DataTypes.STRING(30),
+        allowNull : true
+    },
+    ciudad : {
+        type : DataTypes.STRING(30),
+        allowNull : true
+    },
+    codigo_postal : {
+        type : DataTypes.STRING(15),
+        allowNull : true
+    },
+    telefono : {
+        type : DataTypes.STRING(15),
+        allowNull : true
     }
+}, {
+    timestamps : false,
+    freezeTableName : true
 })
 
-app.post("/resena/crear", async (req, res) => {
-    const usuario = req.body.uId
-    const puntaje = req.body.puntaje
-    const comentario = req.body.comentario
-    const tipo_resena = req.body.tipo_resena
-
-    const nuevaResena = await Resena.create({
-        usuario_id : usuario,
-        puntaje : puntaje,
-        comentario : comentario,
-        tipo_resena : tipo_resena
-    })
-
-    res.json(nuevaResena)
-})
-
-app.get("/resenas/usuarios", async (req, res) => {
-    const resenas = await Resena.findAll({
-        where : {
-            tipo_resena : "usuario"
-        },
-        attributes: ['puntaje', 'comentario'],
-        include : {
-            model : Usuario,
-            attributes : ['nombre']
-        }
-    })
-    
-    res.send(resenas)
-})
-
-app.get("/resenas/influencers", async (req, res) => {
-    const resenas = await Resena.findAll({
-        where : {
-            tipo_resena : "influencer"
-        },
-        attributes: ['comentario','video_solo_influencer','link_solo_influencer'],
-        include : {
-            model : Usuario,
-            attributes : ['nombre']
-        }
-    })
-    
-    res.send(resenas)
-})
-
-app.get("/build", async (req, res) => {
-    const uuid = req.query.id
-    
-    const tipo = await PC_Armado.findOne({
-        where : {
-            id : uuid
-        }
-    })
-
-    let listaProductos = []
-
-    const pc_armado = await PC_Armado_Producto.findAll({
-        where : {
-            pcarmado_id : tipo.id
-        }
-    })
-
-    for (let j = 0; j < pc_armado.length; j++) {
-        const producto = await Producto.findOne({
-            where : {
-                id : pc_armado[j].producto_id
-            }
-        })
-        listaProductos.push(producto)
+const Resena = sequelize.define("resena", {
+    id : {
+        primaryKey : true,
+        type : DataTypes.UUID,
+        defaultValue : Sequelize.UUIDV4
+    },
+    usuario_id : {
+        type : DataTypes.UUID,
+        allowNull : false
+    },
+    puntaje : {
+        type : DataTypes.INTEGER,
+        allowNull : false
+    },
+    comentario : {
+        type : DataTypes.STRING(150),
+        allowNull : false
+    },
+    video_solo_influencer : {
+        type : DataTypes.STRING(200),
+        allowNull : true
+    },
+    link_solo_influencer : {
+        type : DataTypes.STRING(300),
+        allowNull : true
+    },
+    tipo_resena : {
+        type : DataTypes.STRING(50),
+        allowNull : false
     }
-    
-    res.json(listaProductos)
+}, {
+    timestamps : false,
+    freezeTableName : true
 })
 
-app.post("/reporte/generar", async (req, res) => {
-    const uuid = req.body.id
-    const correo = req.body.correo
-    const nombre = req.body.nombre
-    const telefono = req.body.telefono
-    const asunto = req.body.asunto
-    const descripcion = req.body.descripcion
-
-    await Reporte.create({
-        correo : correo,
-        nombre : nombre,
-        telefono : telefono,
-        asunto : asunto,
-        descripcion : descripcion,
-        usuario_id : uuid
-    })
+const Orden = sequelize.define("orden", {
+    id : {
+        primaryKey : true,
+        type : DataTypes.UUID,
+        defaultValue : Sequelize.UUIDV4
+    },
+    usuario_id : {
+        type : DataTypes.UUID,
+        allowNull : false
+    },
+    monto : {
+        type : DataTypes.STRING(10),
+        allowNull : false
+    },
+    direccion : {
+        type : DataTypes.STRING(150),
+        allowNull : false
+    },
+    fecha : {
+        type : DataTypes.DATEONLY,
+        allowNull : true
+    }
+}, {
+    timestamps : false,
+    freezeTableName : true
 })
 
-app.listen(PORT, () => {
-    console.log(`Servidor web iniciado en puerto ${PORT}`)
+const Orden_Producto = sequelize.define("orden_producto", {
+    id : {
+        primaryKey : true,
+        type : DataTypes.UUID,
+        defaultValue : Sequelize.UUIDV4
+    },
+    orden_id : {
+        type : DataTypes.UUID,
+        allowNull : false
+    },
+    producto_id : {
+        type : DataTypes.UUID,
+        allowNull : false
+    }
+}, {
+    timestamps : false,
+    freezeTableName : true
 })
+
+const Producto = sequelize.define("producto", {
+    id : {
+        primaryKey : true,
+        type : DataTypes.UUID,
+        defaultValue : Sequelize.UUIDV4
+    },
+    nombre : {
+        type : DataTypes.STRING(100),
+        allowNull : false
+    },
+    precio : {
+        type : DataTypes.STRING(25),
+        allowNull : false
+    },
+    descripcion : {
+        type : DataTypes.STRING(150),
+        allowNull : false
+    },
+    categoria : {
+        type : DataTypes.STRING(50),
+        allowNull : false
+    },
+    imagen : {
+        type : DataTypes.STRING(150),
+        allowNull : false
+    },
+}, {
+    timestamps : false,
+    freezeTableName : true
+})
+
+const PC_Armado_Producto = sequelize.define("pc_armado_producto", {
+    id : {
+        primaryKey : true,
+        type : DataTypes.UUID,
+        defaultValue : Sequelize.UUIDV4
+    },
+    pcarmado_id : {
+        type : DataTypes.UUID,
+        allowNull : false
+    },
+    producto_id : {
+        type : DataTypes.UUID,
+        allowNull : false
+    }
+}, {
+    timestamps : false,
+    freezeTableName : true
+})
+
+const PC_Armado = sequelize.define("pc_armado", {
+    id : {
+        primaryKey : true,
+        type : DataTypes.UUID,
+        defaultValue : Sequelize.UUIDV4
+    },
+    nombre : {
+        type : DataTypes.STRING(50),
+        allowNull : false
+    },
+    descripcion : {
+        type : DataTypes.STRING(150),
+        allowNull : false
+    }
+}, {
+    timestamps : false,
+    freezeTableName : true
+})
+
+Reporte.belongsTo(Usuario, {
+    foreignKey : "usuario_id"
+})
+Usuario.hasMany(Reporte,{
+    foreignKey : "id"
+})
+
+Resena.belongsTo(Usuario,{
+    foreignKey : "usuario_id"
+})
+Usuario.hasMany(Resena,{
+    foreignKey : "id"
+})
+
+Orden.belongsTo(Usuario,{
+    foreignKey : "usuario_id"
+})
+Usuario.hasMany(Orden,{
+    foreignKey : "id"
+})
+
+Orden_Producto.belongsTo(Orden,{
+    foreignKey : "orden_id"
+})
+Orden.belongsTo(Orden_Producto,{
+    foreignKey : "id"
+})
+
+Orden_Producto.belongsTo(Producto,{
+    foreignKey : "producto_id"
+})
+Producto.belongsTo(Orden_Producto,{
+    foreignKey : "id"
+})
+
+PC_Armado_Producto.belongsTo(Producto,{
+    foreignKey : "producto_id"
+})
+Producto.belongsTo(PC_Armado_Producto,{
+    foreignKey : "id"
+})
+
+PC_Armado_Producto.belongsTo(PC_Armado,{
+    foreignKey : "pcarmado_id"
+})
+PC_Armado.hasMany(PC_Armado_Producto,{
+    foreignKey : "id"
+})
+
+module.exports = {
+    Reporte,
+    Usuario,
+    Resena,
+    Orden,
+    Orden_Producto,
+    Producto,
+    PC_Armado_Producto,
+    PC_Armado
+}
